@@ -47,10 +47,10 @@ test('tray menu falls back to English labels', () => {
   ])
 })
 
-test('startup screen contains only the logo and loading indicator', async () => {
+test('startup screen contains logo, loading indicator, and plugin-market card', async () => {
   const html = await readFile(new URL('../src/startup.html', import.meta.url), 'utf8')
 
   assert.match(html, /trayTemplate@2x\.png/)
   assert.match(html, /class="progress"/)
-  assert.doesNotMatch(html, /<h1|<p/)
+  assert.match(html, /id="market-card"/)
 })

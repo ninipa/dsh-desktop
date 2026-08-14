@@ -5,6 +5,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  ipcMain,
   Menu,
   nativeImage,
   nativeTheme,
@@ -14,7 +15,10 @@ import {
 import {
   compareVersions,
   getDshVersion,
+  installMarketPlugin,
+  isMarketInstalled,
   resolveDshCommand,
+  resolvePnpmBinDir,
   startDshService,
 } from './dsh-service.js'
 import { applyMacTitleBarStyle } from './mac-titlebar.js'
@@ -37,6 +41,7 @@ let isQuitting = false
 let restartCount = 0
 let stopping = false
 let quitting = false
+let marketPromptTimer
 
 const dshHome = path.join(app.getPath('appData'), 'Dsh', 'dsh-home')
 
@@ -175,7 +180,10 @@ async function startAndLoad() {
   }
 
   try {
-    service = startDshService({ command, dshHome, environment: { ...process.env } })
+    // The dsh web process needs pnpm on its PATH for the plugin market at
+    // runtime; GUI-launched apps do not inherit it, so inject it explicitly.
+    const pnpmBinDir = await resolvePnpmBinDir()
+    service = startDshService({ command, dshHome, environment: { ...process.env }, pathExtras: pnpmBinDir })
     const current = service
     current.child.on('exit', () => {
       if (stopping || isQuitting) return
@@ -200,7 +208,15 @@ async function startAndLoad() {
     serviceUrl = await current.ready
     log(`ready: ${serviceUrl}`)
     restartCount = 0 // a healthy run resets the crash counter
-    await mainWindow?.loadURL(serviceUrl)
+    if (isMarketInstalled(dshHome)) {
+      await mainWindow?.loadURL(serviceUrl)
+    } else {
+      // First-run onboarding: keep the startup page showing the plugin-market
+      // card; fall back to the UI after 30s if the user does nothing.
+      marketPromptTimer = setTimeout(() => {
+        void mainWindow?.loadURL(serviceUrl)
+      }, 30_000)
+    }
   } catch (error) {
     log(`start failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`)
     stopping = true
@@ -208,6 +224,27 @@ async function startAndLoad() {
     app.quit()
   }
 }
+
+ipcMain.handle('market:status', () => isMarketInstalled(dshHome))
+
+ipcMain.handle('market:install', async () => {
+  try {
+    const command = await resolveDshCommand()
+    return await installMarketPlugin({ command, dshHome, environment: { ...process.env } })
+  } catch (error) {
+    return { ok: false, output: error instanceof Error ? error.message : String(error) }
+  }
+})
+
+ipcMain.handle('market:skip', () => {
+  clearTimeout(marketPromptTimer)
+  void mainWindow?.loadURL(serviceUrl)
+})
+
+ipcMain.handle('market:restart', () => {
+  app.relaunch()
+  app.quit()
+})
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 

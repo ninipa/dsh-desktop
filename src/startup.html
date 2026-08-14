@@ -98,6 +98,72 @@
           filter: invert(1);
         }
       }
+
+      .market-card {
+        max-width: 340px;
+        margin-top: 28px;
+        padding: 14px 18px;
+        border-radius: 12px;
+        text-align: left;
+        color: var(--startup-indicator);
+        background: rgba(127, 127, 127, 0.08);
+        border: 1px solid rgba(127, 127, 127, 0.18);
+      }
+
+      .market-card[hidden] {
+        display: none;
+      }
+
+      .market-title {
+        margin: 0 0 6px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .market-desc {
+        margin: 0 0 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        opacity: 0.75;
+      }
+
+      .market-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .market-actions button {
+        flex: 1;
+        padding: 6px 10px;
+        border: none;
+        border-radius: 8px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .market-actions button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      #market-enable {
+        color: var(--startup-background);
+        background: var(--startup-indicator);
+      }
+
+      #market-skip {
+        color: var(--startup-indicator);
+        background: transparent;
+        border: 1px solid currentColor;
+      }
+
+      .market-result {
+        margin: 10px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        opacity: 0.85;
+        word-break: break-all;
+      }
     </style>
   </head>
   <body>
@@ -106,11 +172,69 @@
         <img src="../assets/trayTemplate@2x.png" alt="DSH Desktop" />
       </div>
       <div class="progress" id="progress" aria-label="正在启动"></div>
+      <div class="market-card" id="market-card" hidden>
+        <p class="market-title" data-i18n="marketTitle">启用插件市场？</p>
+        <p class="market-desc" data-i18n="marketDesc">安装美化主题与能力扩展插件，装好后重启应用生效。</p>
+        <div class="market-actions">
+          <button id="market-enable" type="button" data-i18n="marketEnable">启用</button>
+          <button id="market-skip" type="button" data-i18n="marketSkip">跳过</button>
+        </div>
+        <p class="market-result" id="market-result" hidden></p>
+      </div>
     </main>
     <script>
-      if (!navigator.language.toLowerCase().startsWith("zh")) {
-        document.documentElement.lang = "en";
-        document.querySelector("#progress").setAttribute("aria-label", "Starting");
+      const I18N = {
+        marketTitle: { zh: "启用插件市场？", en: "Enable plugin market?" },
+        marketDesc: {
+          zh: "安装美化主题与能力扩展插件，装好后重启应用生效。",
+          en: "Install themes and capability plugins. Restart the app to activate.",
+        },
+        marketEnable: { zh: "启用", en: "Enable" },
+        marketSkip: { zh: "跳过", en: "Skip" },
+        marketEnabled: { zh: "已启用，重启应用后生效。", en: "Enabled. Restart the app to activate." },
+        marketFailed: { zh: "启用失败：", en: "Enable failed: " },
+        marketRestart: { zh: "立即重启", en: "Restart now" },
+      }
+      const lang = navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en"
+      document.documentElement.lang = lang === "zh" ? "zh-CN" : "en"
+      if (lang !== "zh") {
+        document.querySelector("#progress").setAttribute("aria-label", "Starting")
+      }
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.dataset.i18n
+        if (I18N[key]) el.textContent = I18N[key][lang]
+      })
+
+      const shell = window.desktopShell
+      if (shell) {
+        shell.isMarketEnabled().then((enabled) => {
+          if (!enabled) document.querySelector("#market-card")?.removeAttribute("hidden")
+        })
+        const enableBtn = document.querySelector("#market-enable")
+        const skipBtn = document.querySelector("#market-skip")
+        const resultEl = document.querySelector("#market-result")
+        let skipIsRestart = false
+
+        // One button, one action: a click must never fire both handlers
+        // (addEventListener cannot be overridden by assigning onclick).
+        skipBtn?.addEventListener("click", () => {
+          if (skipIsRestart) shell.restartApp()
+          else shell.skipMarket()
+        })
+
+        enableBtn?.addEventListener("click", async () => {
+          enableBtn.disabled = true
+          resultEl.hidden = false
+          const res = await shell.installMarket()
+          if (res && res.ok) {
+            resultEl.textContent = I18N.marketEnabled[lang]
+            skipIsRestart = true
+            skipBtn.textContent = I18N.marketRestart[lang]
+          } else {
+            resultEl.textContent = I18N.marketFailed[lang] + ((res && res.output) || "unknown")
+            enableBtn.disabled = false
+          }
+        })
       }
     </script>
   </body>

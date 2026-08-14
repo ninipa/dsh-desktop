@@ -1,5 +1,5 @@
 import { execFile, spawn, spawnSync } from 'node:child_process'
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
@@ -122,6 +122,7 @@ export function startDshService({
   dshHome,
   environment = process.env,
   timeoutMs = 60_000,
+  pathExtras = '',
 } = {}) {
   if (!command || command.length === 0) {
     throw new Error('command is required')
@@ -177,6 +178,7 @@ export function startDshService({
       DSH_HOME: dshHome,
       NODE_OPTIONS: '', // neutralise any NODE_OPTIONS inherited from the caller's environment
       DSH_DESKTOP: '1',
+      ...(pathExtras ? { PATH: `${pathExtras}:${environment.PATH ?? ''}` } : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true, // own process group so stop() can terminate every descendant
@@ -305,4 +307,53 @@ export function startDshService({
   }
 
   return { child, ready, stop }
+}
+
+export function isMarketInstalled(dshHome) {
+  // dshmarket is installed into <dshHome>/profiles/web/node_modules/dshmarket
+  return existsSync(path.join(dshHome, 'profiles', 'web', 'node_modules', 'dshmarket'))
+}
+
+// pnpm is used by dsh plugin commands and by the plugin market at runtime, but
+// GUI-launched apps cannot find it on the inherited PATH. Resolve it through
+// the login shell and return its bin directory ('' when unresolvable).
+export async function resolvePnpmBinDir({
+  shellPath = '/bin/zsh',
+  probePnpm = 'command -v pnpm',
+} = {}) {
+  try {
+    const { stdout } = await execFileAsync(shellPath, ['-l', '-i', '-c', probePnpm], { timeout: EXEC_TIMEOUT_MS })
+    const pnpm = lastLine(stdout)
+    return pnpm ? path.dirname(pnpm) : ''
+  } catch {
+    return ''
+  }
+}
+
+export async function installMarketPlugin({
+  command,
+  dshHome,
+  environment = process.env,
+  shellPath = '/bin/zsh',
+  probePnpm = 'command -v pnpm',
+} = {}) {
+  // dsh plugin shells out to pnpm, which GUI-launched apps cannot find on the
+  // inherited PATH; resolve it through the login shell and prepend its bin dir.
+  const pnpmBinDir = await resolvePnpmBinDir({ shellPath, probePnpm })
+
+  return new Promise((resolve) => {
+    const child = spawn(command[0], [...command.slice(1), 'plugin', '--profile', 'web', 'add', 'dshmarket'], {
+      env: {
+        ...environment,
+        DSH_HOME: dshHome,
+        PATH: pnpmBinDir ? `${pnpmBinDir}:${environment.PATH ?? ''}` : environment.PATH,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let output = ''
+    child.stdout.on('data', (chunk) => { output += String(chunk) })
+    child.stderr.on('data', (chunk) => { output += String(chunk) })
+    child.once('error', (error) => resolve({ ok: false, output: String(error) }))
+    child.once('exit', (code) => resolve({ ok: code === 0, output }))
+  })
 }

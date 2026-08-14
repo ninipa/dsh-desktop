@@ -10,7 +10,7 @@
     "start": "electron .",
     "test": "node --test",
     "smoke:packaged": "node scripts/smoke-packaged.mjs",
-    "pack": "electron-builder --dir",
+    "pack": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir",
     "dist": "electron-builder",
     "dist:mac": "npm run dist:mac:arm64",
     "dist:mac:arm64": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --arm64 --publish never",

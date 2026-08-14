@@ -1,3 +1,7 @@
+import { fileURLToPath } from 'node:url'
+
+const PRELOAD = fileURLToPath(new URL('./preload.cjs', import.meta.url))
+
 export function createWindowOptions(platform = process.platform, useDarkColors = false) {
   const isMac = platform === 'darwin'
 
@@ -16,6 +20,7 @@ export function createWindowOptions(platform = process.platform, useDarkColors =
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: PRELOAD,
     },
   }
 }

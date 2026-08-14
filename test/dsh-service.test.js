@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import {
   buildDshArgs,
   compareVersions,
   extractReadyUrl,
+  isMarketInstalled,
   resolveDshCommand,
 } from '../src/dsh-service.js'
 
@@ -102,4 +106,16 @@ test('resolveDshCommand rejects with install guidance when node is missing', asy
     resolveDshCommand({ probeDsh: 'exit 1', probeNpx: 'exit 1', probeNode: 'exit 1' }),
     /Install Node\.js/,
   )
+})
+
+test('isMarketInstalled detects dshmarket in the web profile', () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'dsh-market-test-'))
+  try {
+    assert.equal(isMarketInstalled(home), false)
+    mkdirSync(path.join(home, 'profiles', 'web', 'node_modules', 'dshmarket'), { recursive: true })
+    writeFileSync(path.join(home, 'profiles', 'web', 'node_modules', 'dshmarket', 'package.json'), '{}')
+    assert.equal(isMarketInstalled(home), true)
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
 })
