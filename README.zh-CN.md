@@ -17,6 +17,20 @@
 
 DSH Desktop 把官方 DeepSeek Harness Web UI 包装成原生 macOS 应用。它**不捆绑 dsh**——而是启动你系统里已安装的 `dsh`，因此你执行 `npm update -g @deepseek-ai/dsh` 后，应用下次启动会自动跟随上游新版。
 
+## 为什么不捆绑 dsh
+
+大多数桌面封装会把**一整套 dsh**（20 多个 `@deepseek-ai/dsh-*` 包 + 原生模块）打进 `.app` 里。DSH Desktop 刻意反其道而行：直接启动你系统里已经装好的 `dsh`。
+
+| 维度 | 捆绑 dsh | DSH Desktop |
+|---|---|---|
+| **上游更新** | 等作者重新打包、发布新版 | `npm update -g @deepseek-ai/dsh` 后重启即用 |
+| **体积** | 数百 MB（Electron + 整个 dsh 依赖树 + 原生模块） | 仅 Electron 壳本身，不含 dsh 依赖树 |
+| **重复安装** | app 里藏一份 dsh，与你的 CLI 版本割裂 | 复用你全局的 dsh——一份、一个版本 |
+| **升级节奏** | 被钉死在作者选择的版本 | 你决定何时升级，RC 动荡期可先观望 |
+| **数据** | 可能共享或复制你的 `~/.dsh` | `DSH_HOME` 隔离，绝不碰 `~/.dsh` |
+
+dsh 正处于快速演进的 developer preview：上游几天内就可能发布破坏性变更。捆绑它意味着每次上游变化你都得等一次重打包；而启动你已安装的 dsh，能让这个壳保持轻量、始终最新、且节奏由你掌控。
+
 > [!IMPORTANT]
 > 本项目是非官方社区封装，依赖快速演进中的 `@deepseek-ai/dsh`（当前 `0.1.0-rc.x`，developer preview，上游明确声明会有破坏性变更）。**仅支持 macOS。**
 

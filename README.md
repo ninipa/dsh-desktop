@@ -18,6 +18,20 @@
 
 DSH Desktop wraps the official DeepSeek Harness Web UI into a native macOS app. It does **not** bundle dsh — instead it launches the `dsh` you already have installed on your system, so it automatically follows upstream as you run `npm update -g @deepseek-ai/dsh`.
 
+## Why not bundle dsh?
+
+Most desktop wrappers **package a full copy of dsh** — 20+ `@deepseek-ai/dsh-*` packages plus native modules — inside the `.app`. DSH Desktop deliberately does the opposite: it launches the `dsh` you already have.
+
+| | Bundled dsh | DSH Desktop |
+|---|---|---|
+| **Upstream updates** | Wait for the author to rebuild and release a new app | `npm update -g @deepseek-ai/dsh`, relaunch — done |
+| **App size** | Hundreds of MB (Electron + the whole dsh dependency tree + native modules) | Electron shell only — no dsh tree shipped |
+| **Duplicate install** | A second dsh copy hides inside the app, version-split from your CLI | Reuses your global dsh — one copy, one version |
+| **Upgrade control** | Locked to whatever version the author pinned | You choose when to upgrade — hold back during RC churn if you like |
+| **Data** | May share or duplicate your `~/.dsh` | Isolated `DSH_HOME`, never touches `~/.dsh` |
+
+dsh is a fast-moving developer preview: upstream ships breaking changes within days. Bundling it turns every upstream change into a rebuild you must wait for. Spawning the dsh you already installed keeps this shell tiny, always current, and under your control.
+
 > [!IMPORTANT]
 > This is an unofficial community wrapper. It depends on the rapidly evolving `@deepseek-ai/dsh` (currently `0.1.0-rc.x`, developer preview — the upstream explicitly warns about breaking changes). **macOS only.**
 
