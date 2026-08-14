@@ -1,0 +1,86 @@
+{
+  "name": "dsh-desktop",
+  "version": "0.1.0",
+  "description": "A desktop shell for DeepSeek Harness (dsh) that spawns the system-installed dsh.",
+  "author": "qianye wu",
+  "type": "module",
+  "main": "src/main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "smoke:packaged": "node scripts/smoke-packaged.mjs",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:mac": "npm run dist:mac:arm64",
+    "dist:mac:arm64": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --arm64 --publish never",
+    "dist:mac:x64": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "43.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "afterSign": "scripts/after-pack.cjs",
+    "appId": "com.local.my-dsh",
+    "productName": "DSH Desktop",
+    "artifactName": "DSH-Desktop-${version}-${arch}.${ext}",
+    "asar": false,
+    "files": [
+      "src/**/*",
+      "assets/icon.icns",
+      "assets/icon.png",
+      "assets/tray.png",
+      "assets/trayTemplate.png",
+      "assets/trayTemplate@2x.png",
+      "package.json",
+      "LICENSE"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "DSH Desktop ${version}",
+      "backgroundColor": "#f5f7fb",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 185
+        },
+        {
+          "x": 400,
+          "y": 185,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}
