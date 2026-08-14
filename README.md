@@ -58,6 +58,15 @@ npm install -g @deepseek-ai/dsh
 
 On first launch you will be asked for an API key once (Settings → Models in the UI). The app then opens the full Harness interface.
 
+### Plugin Market
+
+The shell stays clean — it ships **no plugins** (not even the market itself). On first launch a card on the startup screen offers to install the **plugin market** (`dshmarket`) with one click; after a restart you get full plugin management in Settings → Plugin Market.
+
+Why this design:
+- The shell never bundles third-party plugin code — dsh upgrades are unaffected
+- One click to enable, everything else (install / update / uninstall) happens in the UI
+- Your plugin setup lives in the isolated `DSH_HOME`, separate from bare `dsh`
+
 ### Where your data lives
 
 Everything you do inside the app — your API key, conversations, workspaces, installed plugins, and settings — is stored under a **dedicated, isolated data directory**:
