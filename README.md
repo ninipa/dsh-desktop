@@ -16,7 +16,9 @@
   <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-171513.svg?style=flat-square" />
 </p>
 
-DSH Desktop wraps the official DeepSeek Harness Web UI into a native macOS app. It does **not** bundle dsh — instead it launches the `dsh` you already have installed on your system, so it automatically follows upstream as you run `npm update -g @deepseek-ai/dsh`.
+DSH Desktop wraps the official DeepSeek Harness Web UI into a native macOS app. Launch the app and it **starts `dsh web` for you** on a random loopback port; quit the app and it **stops the service cleanly** — no manual `dsh web`, no terminal, no orphan processes.
+
+It does **not** bundle dsh — instead it launches the `dsh` you already have installed on your system, so it automatically follows upstream as you run `npm update -g @deepseek-ai/dsh`.
 
 ## Why not bundle dsh?
 

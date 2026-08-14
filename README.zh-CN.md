@@ -15,7 +15,9 @@
   <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-171513.svg?style=flat-square" />
 </p>
 
-DSH Desktop 把官方 DeepSeek Harness Web UI 包装成原生 macOS 应用。它**不捆绑 dsh**——而是启动你系统里已安装的 `dsh`，因此你执行 `npm update -g @deepseek-ai/dsh` 后，应用下次启动会自动跟随上游新版。
+DSH Desktop 把官方 DeepSeek Harness Web UI 包装成原生 macOS 应用。启动应用，它会**自动拉起 `dsh web`**（随机回环端口）；退出应用，它会**干净地停止服务**——无需手动 `dsh web`、无需终端、无残留进程。
+
+它**不捆绑 dsh**——而是启动你系统里已安装的 `dsh`，因此你执行 `npm update -g @deepseek-ai/dsh` 后，应用下次启动会自动跟随上游新版。
 
 ## 为什么不捆绑 dsh
 
