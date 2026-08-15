@@ -1,5 +1,5 @@
 import { execFile, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, appendFileSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
@@ -330,6 +330,23 @@ export async function resolvePnpmBinDir({
   }
 }
 
+// pnpm 11's minimumReleaseAge supply-chain policy blocks freshly published
+// packages unless they are whitelisted per version. The plugin market ships
+// updates very frequently, so per-version whitelisting is impractical;
+// disable the age gate for the isolated profile instead. Without this, market
+// updates silently no-op ("Already up to date") and the UI loops forever.
+export function ensureMinimumReleaseAgeDisabled(dshHome) {
+  const yamlPath = path.join(dshHome, 'profiles', 'web', 'pnpm-workspace.yaml')
+  try {
+    const content = readFileSync(yamlPath, 'utf8')
+    if (/^minimumReleaseAge:/m.test(content)) return // already set
+    appendFileSync(yamlPath, 'minimumReleaseAge: 0\n')
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    // no workspace file yet; dsh creates it on first plugin operation
+  }
+}
+
 export async function installMarketPlugin({
   command,
   dshHome,
@@ -354,6 +371,10 @@ export async function installMarketPlugin({
     child.stdout.on('data', (chunk) => { output += String(chunk) })
     child.stderr.on('data', (chunk) => { output += String(chunk) })
     child.once('error', (error) => resolve({ ok: false, output: String(error) }))
-    child.once('exit', (code) => resolve({ ok: code === 0, output }))
+    child.once('exit', (code) => {
+      const ok = code === 0
+      if (ok) ensureMinimumReleaseAgeDisabled(dshHome)
+      resolve({ ok, output })
+    })
   })
 }

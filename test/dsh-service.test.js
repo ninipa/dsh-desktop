@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
   buildDshArgs,
   compareVersions,
+  ensureMinimumReleaseAgeDisabled,
   extractReadyUrl,
   isMarketInstalled,
   resolveDshCommand,
@@ -115,6 +116,34 @@ test('isMarketInstalled detects dshmarket in the web profile', () => {
     mkdirSync(path.join(home, 'profiles', 'web', 'node_modules', 'dshmarket'), { recursive: true })
     writeFileSync(path.join(home, 'profiles', 'web', 'node_modules', 'dshmarket', 'package.json'), '{}')
     assert.equal(isMarketInstalled(home), true)
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('ensureMinimumReleaseAgeDisabled appends the gate-off setting once', () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'dsh-mra-test-'))
+  const yaml = path.join(home, 'profiles', 'web', 'pnpm-workspace.yaml')
+  try {
+    mkdirSync(path.dirname(yaml), { recursive: true })
+    writeFileSync(yaml, 'packages:\n  - .\nminimumReleaseAgeExclude:\n  - dshmarket@1.0.3\n')
+    ensureMinimumReleaseAgeDisabled(home)
+    const content = readFileSync(yaml, 'utf8')
+    assert.match(content, /^minimumReleaseAge: 0$/m)
+    assert.equal((content.match(/^minimumReleaseAge: 0$/gm) ?? []).length, 1)
+    // idempotent: calling again must not duplicate the line
+    ensureMinimumReleaseAgeDisabled(home)
+    const again = readFileSync(yaml, 'utf8')
+    assert.equal((again.match(/^minimumReleaseAge: 0$/gm) ?? []).length, 1)
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('ensureMinimumReleaseAgeDisabled is a no-op when the workspace file is missing', () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'dsh-mra-empty-'))
+  try {
+    assert.doesNotThrow(() => ensureMinimumReleaseAgeDisabled(home))
   } finally {
     rmSync(home, { recursive: true, force: true })
   }
