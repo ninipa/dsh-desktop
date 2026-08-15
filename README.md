@@ -14,6 +14,8 @@
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-171513.svg?style=flat-square" /></a>
   <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-171513.svg?style=flat-square" />
+  <a href="https://github.com/ninipa/dsh-desktop/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ninipa/dsh-desktop?style=flat-square&color=171513" /></a>
+  <a href="https://github.com/ninipa/dsh-desktop/actions"><img alt="CI" src="https://github.com/ninipa/dsh-desktop/actions/workflows/release.yml/badge.svg" /></a>
 </p>
 
 DSH Desktop wraps the official DeepSeek Harness Web UI into a native macOS app. Launch the app and it **starts `dsh web` for you** on a random loopback port; quit the app and it **stops the service cleanly** — no manual `dsh web`, no terminal, no orphan processes.

@@ -13,6 +13,8 @@
   <a href="README.md">English</a> ·
   <a href="LICENSE"><img alt="许可证：MIT" src="https://img.shields.io/badge/License-MIT-171513.svg?style=flat-square" /></a>
   <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-171513.svg?style=flat-square" />
+  <a href="https://github.com/ninipa/dsh-desktop/releases"><img alt="最新版本" src="https://img.shields.io/github/v/release/ninipa/dsh-desktop?style=flat-square&color=171513" /></a>
+  <a href="https://github.com/ninipa/dsh-desktop/actions"><img alt="CI 构建" src="https://github.com/ninipa/dsh-desktop/actions/workflows/release.yml/badge.svg" /></a>
 </p>
 
 DSH Desktop 把官方 DeepSeek Harness Web UI 包装成原生 macOS 应用。启动应用，它会**自动拉起 `dsh web`**（随机回环端口）；退出应用，它会**干净地停止服务**——无需手动 `dsh web`、无需终端、无残留进程。
