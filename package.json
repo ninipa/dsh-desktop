@@ -25,6 +25,7 @@
     "appId": "com.local.my-dsh",
     "productName": "DSH Desktop",
     "artifactName": "DSH-Desktop-${version}-${arch}.${ext}",
+    "electronLanguages": ["en", "zh"],
     "asar": false,
     "files": [
       "src/**/*",
