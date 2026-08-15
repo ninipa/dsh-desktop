@@ -50,7 +50,7 @@ jobs:
       - name: Build and sign
         run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never --config.mac.notarize=true
         env:
-          CSC_NAME: "Developer ID Application: qianye wu (89937P449J)"
+          CSC_NAME: "qianye wu (89937P449J)"
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
