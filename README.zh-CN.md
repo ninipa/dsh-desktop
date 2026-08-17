@@ -55,7 +55,7 @@ npm install -g @deepseek-ai/dsh
 
 1. 从 [GitHub Releases](../../releases) 下载最新的 `DSH-Desktop-*.dmg`。
 2. 打开 DMG，把 **DSH Desktop** 拖入「应用程序」。
-3. 双击运行 **DSH Desktop**。发布版为 ad-hoc 签名但**未公证**——首次启动需**右键（或按住 Ctrl 点击）应用 → 打开**。
+3. 双击运行 **DSH Desktop**。发布版为 ad-hoc 签名但**未公证**——macOS 26 上首次启动会提示安全性，需在**系统设置 → 隐私与安全性 → 仍要打开**中允许。
 
 首次启动需要在界面里填一次 API key（Settings → Models），之后即可使用完整的 Harness 界面。
 
@@ -100,7 +100,7 @@ rm -rf "$HOME/Library/Application Support/DSH Desktop"
 
 ### 更新
 
-- **应用外壳**：有新版时下载新的 DMG 覆盖即可。由于构建未公证，**每个新版本下载后都需要右键 → 打开一次**。
+- **应用外壳**：有新版时下载新的 DMG 覆盖即可。由于构建未公证，**每个新版本都需要在系统设置 → 隐私与安全性 → 仍要打开中允许一次**。
 - **dsh 本体**：应用用的是你系统里的 `dsh`，执行 `npm update -g @deepseek-ai/dsh` 后重启应用即可。
 
 ---
@@ -166,7 +166,7 @@ DSH Desktop 是一个薄壳，不 fork、不修改 Harness UI，只负责宿主�
 
 ### 签名与公证
 
-发布版当前为 **ad-hoc 签名且未公证**——Apple 公证服务对 arm64 提交处理异常，公证已暂时停用。下载的构建**首次启动需右键 → 打开**，且**每个新版本都要再操作一次**。Apple arm64 公证管线恢复后将重新启用 Developer ID 签名 + 公证（CI 配置已保留待恢复）。
+发布版当前为 **ad-hoc 签名且未公证**——Apple 公证服务对 arm64 提交处理异常，公证已暂时停用。macOS 26 上，下载的构建首次启动会提示安全性，需在**系统设置 → 隐私与安全性 → 仍要打开**中允许（每个新版本都要操作一次）。Apple arm64 公证管线恢复后将重新启用 Developer ID 签名 + 公证（CI 配置已保留待恢复）。
 
 ---
 
