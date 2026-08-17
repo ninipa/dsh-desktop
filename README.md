@@ -56,7 +56,7 @@ npm install -g @deepseek-ai/dsh
 
 1. Download the latest `DSH-Desktop-*.dmg` from [GitHub Releases](../../releases).
 2. Open the DMG and drag **DSH Desktop** into **Applications**.
-3. Launch **DSH Desktop**. Releases are ad-hoc signed but **not notarized** — on macOS 26, first launch shows a security prompt; allow it in **System Settings → Privacy & Security → Open Anyway**.
+3. Launch **DSH Desktop**. Releases are ad-hoc signed but **not notarized** — on macOS 26, the first launch is blocked by Gatekeeper (the old right-click → Open bypass no longer works). Try opening the app once — it will be blocked — then allow it in **System Settings → Privacy & Security → Open Anyway**. This must be repeated for every new version.
 
 On first launch you will be asked for an API key once (Settings → Models in the UI). The app then opens the full Harness interface.
 
@@ -167,7 +167,7 @@ DSH Desktop is a thin shell. It does not fork or modify the Harness UI; it only 
 
 ### Signing & notarization
 
-Release builds are currently **ad-hoc signed and not notarized** — Apple's notary service has been stalling arm64 submissions, so notarization is temporarily disabled. On macOS 26, first launch of a downloaded build shows a security prompt: allow it in **System Settings → Privacy & Security → Open Anyway** (repeat for each new version). Developer ID signing + notarization will be restored once Apple's arm64 pipeline recovers; the CI configuration is kept ready for that.
+Release builds are currently **ad-hoc signed and not notarized** — Apple's notary service has been stalling arm64 submissions, so notarization is temporarily disabled. On macOS 26, the first launch of a downloaded build is blocked by Gatekeeper (the old right-click → Open bypass no longer works): try opening once, then allow it in **System Settings → Privacy & Security → Open Anyway**, and repeat for each new version. Developer ID signing + notarization will be restored once Apple's arm64 pipeline recovers; the CI configuration is kept ready for that.
 
 ---
 
