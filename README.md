@@ -56,7 +56,7 @@ npm install -g @deepseek-ai/dsh
 
 1. Download the latest `DSH-Desktop-*.dmg` from [GitHub Releases](../../releases).
 2. Open the DMG and drag **DSH Desktop** into **Applications**.
-3. Launch **DSH Desktop**.
+3. Launch **DSH Desktop**. Releases are ad-hoc signed but **not notarized** — on first launch right-click (or Ctrl-click) the app and choose **Open**.
 
 On first launch you will be asked for an API key once (Settings → Models in the UI). The app then opens the full Harness interface.
 
@@ -101,7 +101,7 @@ rm -rf "$HOME/Library/Application Support/DSH Desktop"
 
 ### Updating
 
-- **The app shell**: download the newest DMG when a new release is out.
+- **The app shell**: download the newest DMG when a new release is out. Because builds are not notarized, **right-click → Open** is required again for each new version.
 - **dsh itself**: the app uses your system `dsh`, so just run `npm update -g @deepseek-ai/dsh` and restart the app.
 
 ---
@@ -167,7 +167,7 @@ DSH Desktop is a thin shell. It does not fork or modify the Harness UI; it only 
 
 ### Signing & notarization
 
-Release builds are signed with an Apple **Developer ID** certificate and **notarized**, so macOS Gatekeeper shows no warning. Building locally without a certificate falls back to ad-hoc signing (right-click → Open on first launch).
+Release builds are currently **ad-hoc signed and not notarized** — Apple's notary service has been stalling arm64 submissions, so notarization is temporarily disabled. Downloaded builds require **right-click → Open** on first launch, and again for each new version. Developer ID signing + notarization will be restored once Apple's arm64 pipeline recovers; the CI configuration is kept ready for that.
 
 ---
 

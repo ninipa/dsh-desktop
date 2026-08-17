@@ -28,32 +28,36 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - name: Import signing certificate
+      # Developer ID signing + notarization is temporarily disabled: Apple's
+      # notary service has been stalling arm64 submissions (see AGENTS.md).
+      # The p12 import + notarize config below is kept (commented) so it can
+      # be restored once Apple recovers — restore checklist in docs/02-plan.
+      # - name: Import signing certificate
+      #   env:
+      #     CSC_LINK: ${{ secrets.CSC_LINK }}
+      #     CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      #   run: |
+      #     KEYCHAIN_PW="$(openssl rand -base64 24)"
+      #     echo "$CSC_LINK" | base64 --decode > /tmp/cert.p12
+      #     security create-keychain -p "$KEYCHAIN_PW" build.keychain
+      #     security unlock-keychain -p "$KEYCHAIN_PW" build.keychain
+      #     security import /tmp/cert.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
+      #     security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" build.keychain
+      #     security list-keychains -d user -s build.keychain
+      #     security default-keychain -s build.keychain
+      #     rm -f /tmp/cert.p12
+      #     echo "CSC_KEYCHAIN=build.keychain" >> "$GITHUB_ENV"
+      - name: Build
+        run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: |
-          # Workaround for electron-builder #10066: import the p12 into a
-          # dedicated keychain and sign via CSC_NAME/CSC_KEYCHAIN. The
-          # CSC_LINK path passes the p12 password to set-key-partition-list
-          # and hangs on CI; doing it manually avoids that path entirely.
-          KEYCHAIN_PW="$(openssl rand -base64 24)"
-          echo "$CSC_LINK" | base64 --decode > /tmp/cert.p12
-          security create-keychain -p "$KEYCHAIN_PW" build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PW" build.keychain
-          security import /tmp/cert.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" build.keychain
-          security list-keychains -d user -s build.keychain
-          security default-keychain -s build.keychain
-          rm -f /tmp/cert.p12
-          echo "CSC_KEYCHAIN=build.keychain" >> "$GITHUB_ENV"
-      - name: Build and sign
-        run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never --config.mac.notarize=true
-        env:
-          CSC_NAME: "qianye wu (89937P449J)"
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Explicitly disable identity auto-discovery so the build is
+          # deterministically ad-hoc signed (after-pack.cjs fallback).
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # Restore when Apple notarization is re-enabled:
+          # CSC_NAME: "qianye wu (89937P449J)"
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}
