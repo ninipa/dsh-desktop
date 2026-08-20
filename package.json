@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A desktop shell for DeepSeek Harness (dsh) that spawns the system-installed dsh.",
   "author": "qianye wu",
   "type": "module",
@@ -25,7 +25,10 @@
     "appId": "com.local.my-dsh",
     "productName": "DSH Desktop",
     "artifactName": "DSH-Desktop-${version}-${arch}.${ext}",
-    "electronLanguages": ["en", "zh"],
+    "electronLanguages": [
+      "en",
+      "zh"
+    ],
     "asar": false,
     "files": [
       "src/**/*",
