@@ -79,7 +79,7 @@ Everything you do inside the app — your API key, conversations, workspaces, in
 | Conversations / sessions | `~/Library/Application Support/Dsh/dsh-home/storages/` and `sessions/` |
 | Installed plugins / profile | `~/Library/Application Support/Dsh/dsh-home/profiles/` |
 | Settings | `~/Library/Application Support/Dsh/dsh-home/settings.yaml` |
-| App logs | `~/Library/Application Support/DSH Desktop/dsh-desktop.log` |
+| App logs | `~/Library/Logs/DSH Desktop/dsh-desktop.log` |
 
 ### Data is isolated from bare `dsh`
 

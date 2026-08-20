@@ -78,7 +78,7 @@ npm install -g @deepseek-ai/dsh
 | 会话 / 对话记录 | `~/Library/Application Support/Dsh/dsh-home/storages/` 和 `sessions/` |
 | 安装的插件 / profile | `~/Library/Application Support/Dsh/dsh-home/profiles/` |
 | 设置 | `~/Library/Application Support/Dsh/dsh-home/settings.yaml` |
-| 应用日志 | `~/Library/Application Support/DSH Desktop/dsh-desktop.log` |
+| 应用日志 | `~/Library/Logs/DSH Desktop/dsh-desktop.log` |
 
 ### 数据与原生 dsh 相互隔离（重要）
 

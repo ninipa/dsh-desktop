@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -15,6 +15,7 @@ import {
   isMarketInstalled,
   isNpxFallbackCommand,
   markUpdatePrompted,
+  migrateLegacyUserData,
   resolveDshCommand,
   shouldCheckUpdate,
 } from '../src/dsh-service.js'
@@ -280,6 +281,50 @@ test('shouldCheckUpdate treats a corrupted state file as empty', () => {
   try {
     writeFileSync(stateFile, 'not json {')
     assert.equal(shouldCheckUpdate(stateFile, 'dsh', 1_000), true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('migrateLegacyUserData copies log and state from legacy dirs once', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-migrate-'))
+  try {
+    const legacy = path.join(dir, 'legacy')
+    const legacyCapital = path.join(dir, 'legacy-capital')
+    const newUserData = path.join(dir, 'new')
+    mkdirSync(path.join(legacy), { recursive: true })
+    mkdirSync(path.join(legacyCapital), { recursive: true })
+    writeFileSync(path.join(legacy, 'dsh-desktop.log'), 'old log\n')
+    writeFileSync(path.join(legacy, 'update-prompt-state.json'), '{"dsh":{"promptedAt":1}}')
+    writeFileSync(path.join(legacyCapital, 'dsh-desktop.log'), 'capital log\n')
+
+    const logFile = path.join(newUserData, 'logs', 'dsh-desktop.log')
+    const stateFile = path.join(newUserData, 'update-prompt-state.json')
+    migrateLegacyUserData({ legacyDirs: [legacy, legacyCapital], logFile, stateFile })
+
+    assert.equal(readFileSync(logFile, 'utf8'), 'old log\n') // first legacy dir wins
+    assert.equal(readFileSync(stateFile, 'utf8'), '{"dsh":{"promptedAt":1}}')
+
+    // idempotent: a second run must not overwrite an existing destination
+    writeFileSync(logFile, 'new log\n')
+    migrateLegacyUserData({ legacyDirs: [legacy], logFile, stateFile })
+    assert.equal(readFileSync(logFile, 'utf8'), 'new log\n')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('migrateLegacyUserData is a no-op without legacy files', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-migrate-empty-'))
+  try {
+    const newDir = path.join(dir, 'new')
+    migrateLegacyUserData({
+      legacyDirs: [path.join(dir, 'missing-a'), path.join(dir, 'missing-b')],
+      logFile: path.join(newDir, 'dsh-desktop.log'),
+      stateFile: path.join(newDir, 'update-prompt-state.json'),
+    })
+    assert.equal(existsSync(path.join(newDir, 'dsh-desktop.log')), false)
+    assert.equal(existsSync(path.join(newDir, 'update-prompt-state.json')), false)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

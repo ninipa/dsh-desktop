@@ -25,6 +25,7 @@ import {
   isMarketInstalled,
   isNpxFallbackCommand,
   markUpdatePrompted,
+  migrateLegacyUserData,
   resolveDshCommand,
   resolvePnpmBinDir,
   shouldCheckUpdate,
@@ -61,12 +62,20 @@ let updateCardTimer
 let mainUiLoaded = false
 
 const dshHome = path.join(app.getPath('appData'), 'Dsh', 'dsh-home')
-const updateStateFile = path.join(app.getPath('userData'), 'update-prompt-state.json')
 
 app.setName(APP_NAME)
 
-// File log for packaged builds (no terminal): ~/Library/Application Support/DSH Desktop/dsh-desktop.log
-const logFile = path.join(app.getPath('userData'), 'dsh-desktop.log')
+// Packaged builds resolve userData from package.json's `name` ("dsh-desktop")
+// before main.js runs, so setName() alone cannot move it. Pin it explicitly so
+// every build (packaged or `npm start`) shares one directory.
+app.setPath('userData', path.join(app.getPath('appData'), APP_NAME))
+
+// Must come after setPath: getPath('userData') caches on first call.
+const updateStateFile = path.join(app.getPath('userData'), 'update-prompt-state.json')
+
+// File log for packaged builds (no terminal). macOS convention keeps logs out
+// of Application Support: ~/Library/Logs/DSH Desktop/dsh-desktop.log
+const logFile = path.join(app.getPath('logs'), APP_NAME, 'dsh-desktop.log')
 function log(message) {
   try {
     mkdirSync(path.dirname(logFile), { recursive: true })
@@ -293,6 +302,17 @@ function loadMainUiSoon() {
 }
 
 async function launch() {
+  // One-time migration from the legacy split userData dirs (see
+  // migrateLegacyUserData): log + prompt state move to the unified locations.
+  migrateLegacyUserData({
+    legacyDirs: [
+      path.join(app.getPath('appData'), 'dsh-desktop'), // v0.1.0/v0.1.1 packaged builds
+      path.join(app.getPath('appData'), APP_NAME), // dev runs / old installs
+    ],
+    logFile,
+    stateFile: updateStateFile,
+    logFn: log,
+  })
   // Only dev mode (no .app bundle) needs an explicit dock icon. Packaged
   // builds use their own icon.icns, which macOS already renders with the
   // rounded-rect dock mask; calling setIcon() here would override that with

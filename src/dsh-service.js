@@ -1,5 +1,5 @@
 import { execFile, spawn, spawnSync } from 'node:child_process'
-import { existsSync, appendFileSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, appendFileSync, copyFileSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
@@ -468,6 +468,31 @@ export function markUpdatePrompted(stateFile, key, nowMs, version) {
     writeFileSync(stateFile, JSON.stringify(state, null, 2))
   } catch {
     // ignore: see above
+  }
+}
+
+// --- Legacy userData migration ----------------------------------------------
+//
+// v0.1.0/v0.1.1 packaged builds resolved userData from package.json's `name`
+// ("dsh-desktop") because Electron caches that path before main.js runs, while
+// `npm start` dev runs used setName() ("DSH Desktop"). One-time, idempotent
+// migration copies the only files worth keeping (the log and the 24h prompt
+// state) into the unified locations; leftover cache directories are
+// disposable and are deleted by hand once no old instance runs.
+export function migrateLegacyUserData({ legacyDirs, logFile, stateFile, logFn = () => {} } = {}) {
+  const copyIfMissing = (from, to) => {
+    try {
+      if (from && to && !existsSync(to) && existsSync(from)) {
+        mkdirSync(path.dirname(to), { recursive: true })
+        copyFileSync(from, to)
+      }
+    } catch (error) {
+      logFn(`legacy migration failed (${from}): ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  for (const dir of legacyDirs ?? []) {
+    copyIfMissing(path.join(dir, 'dsh-desktop.log'), logFile)
+    copyIfMissing(path.join(dir, 'update-prompt-state.json'), stateFile)
   }
 }
 
