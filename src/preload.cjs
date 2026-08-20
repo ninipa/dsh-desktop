@@ -8,4 +8,9 @@ contextBridge.exposeInMainWorld('desktopShell', {
   installMarket: () => ipcRenderer.invoke('market:install'),
   skipMarket: () => ipcRenderer.invoke('market:skip'),
   restartApp: () => ipcRenderer.invoke('market:restart'),
+  onUpdateStatus: (callback) => ipcRenderer.on('update:status', (_event, payload) => callback(payload)),
+  onUpdateCard: (callback) => ipcRenderer.on('update:card', (_event, payload) => callback(payload)),
+  copyUpdateCommand: () => ipcRenderer.invoke('update:copy'),
+  openUpdatePage: () => ipcRenderer.invoke('update:open'),
+  updateDismissed: () => ipcRenderer.invoke('update:dismissed'),
 })

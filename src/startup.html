@@ -99,7 +99,8 @@
         }
       }
 
-      .market-card {
+      .market-card,
+      .update-card {
         max-width: 340px;
         margin-top: 28px;
         padding: 14px 18px;
@@ -110,14 +111,104 @@
         border: 1px solid rgba(127, 127, 127, 0.18);
       }
 
-      .market-card[hidden] {
+      .market-card[hidden],
+      .update-card[hidden] {
         display: none;
       }
 
-      .market-title {
+      .market-title,
+      .update-title {
         margin: 0 0 6px;
         font-size: 14px;
         font-weight: 600;
+      }
+
+      .update-status {
+        margin-top: 14px;
+        font-size: 12px;
+        line-height: 1.6;
+        opacity: 0.75;
+      }
+
+      .update-status[hidden] {
+        display: none;
+      }
+
+      .update-status-row {
+        margin: 0;
+      }
+
+      .update-entry {
+        padding: 10px 0;
+        border-top: 1px solid rgba(127, 127, 127, 0.18);
+      }
+
+      .update-entry:first-child {
+        padding-top: 0;
+        border-top: none;
+      }
+
+      .update-name {
+        margin: 0 0 2px;
+        font-size: 12px;
+        font-weight: 600;
+        opacity: 0.85;
+      }
+
+      .update-versions {
+        margin: 0;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .update-line {
+        margin: 4px 0 0;
+        font-size: 11px;
+        opacity: 0.7;
+      }
+
+      .update-warning {
+        margin: 4px 0 0;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.5;
+        opacity: 0.9;
+      }
+
+      .update-cmd {
+        margin: 6px 0 0;
+        padding: 6px 8px;
+        border-radius: 6px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 11px;
+        word-break: break-all;
+        background: rgba(127, 127, 127, 0.1);
+      }
+
+      .update-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .update-actions button {
+        flex: 1;
+        padding: 6px 10px;
+        border: none;
+        border-radius: 8px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .update-actions .update-primary {
+        color: var(--startup-background);
+        background: var(--startup-indicator);
+      }
+
+      .update-actions .update-dismiss {
+        color: var(--startup-indicator);
+        background: transparent;
+        border: 1px solid currentColor;
       }
 
       .market-desc {
@@ -172,6 +263,11 @@
         <img src="../assets/trayTemplate@2x.png" alt="DSH Desktop" />
       </div>
       <div class="progress" id="progress" aria-label="正在启动"></div>
+      <div class="update-status" id="update-status" hidden></div>
+      <div class="update-card" id="update-card" hidden>
+        <p class="update-title" data-i18n="updateTitle">检测到新版本</p>
+        <div id="update-entries"></div>
+      </div>
       <div class="market-card" id="market-card" hidden>
         <p class="market-title" data-i18n="marketTitle">启用插件市场？</p>
         <p class="market-desc" data-i18n="marketDesc">安装美化主题与能力扩展插件，装好后重启应用生效。</p>
@@ -194,6 +290,19 @@
         marketEnabled: { zh: "已启用，重启应用后生效。", en: "Enabled. Restart the app to activate." },
         marketFailed: { zh: "启用失败：", en: "Enable failed: " },
         marketRestart: { zh: "立即重启", en: "Restart now" },
+        updateTitle: { zh: "检测到新版本", en: "Updates available" },
+        updateCheckingDsh: { zh: "正在检查 dsh 更新…", en: "Checking for dsh updates…" },
+        updateCheckingApp: { zh: "正在检查应用更新…", en: "Checking for app updates…" },
+        updateCopy: { zh: "复制命令", en: "Copy command" },
+        updateCopied: { zh: "已复制", en: "Copied" },
+        updateOpen: { zh: "打开下载页", en: "Open download page" },
+        updateDismiss: { zh: "忽略", en: "Dismiss" },
+        updateLineLatest: { zh: "latest 稳定线", en: "latest stable line" },
+        updateLineNext: { zh: "next 尝鲜线", en: "next preview line" },
+        updateNextWarning: {
+          zh: "注意：next 线为非稳定版本，可能包含未完成或有问题的功能。",
+          en: "Note: the next line is not a stable release and may contain unfinished or broken features.",
+        },
       }
       const lang = navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en"
       document.documentElement.lang = lang === "zh" ? "zh-CN" : "en"
@@ -207,6 +316,104 @@
 
       const shell = window.desktopShell
       if (shell) {
+        // --- update checks: status lines while checking, card on results ---
+        const updateStatusEl = document.querySelector("#update-status")
+        const updateCardEl = document.querySelector("#update-card")
+        const updateEntriesEl = document.querySelector("#update-entries")
+        const statusRows = {}
+
+        const setUpdateStatus = (key, text) => {
+          updateStatusEl.hidden = false
+          if (!statusRows[key]) {
+            const row = document.createElement("p")
+            row.className = "update-status-row"
+            updateStatusEl.appendChild(row)
+            statusRows[key] = row
+          }
+          statusRows[key].textContent = text
+        }
+
+        const clearUpdateStatus = (key) => {
+          statusRows[key]?.remove()
+          delete statusRows[key]
+          if (!updateStatusEl.querySelector(".update-status-row")) updateStatusEl.hidden = true
+        }
+
+        const showUpdateEntry = ({ key, current, latest, line, command }) => {
+          clearUpdateStatus(key)
+          const entry = document.createElement("div")
+          entry.className = "update-entry"
+
+          const name = document.createElement("p")
+          name.className = "update-name"
+          name.textContent = key === "dsh" ? "dsh" : "DSH Desktop"
+          const versions = document.createElement("p")
+          versions.className = "update-versions"
+          versions.textContent = `${current} → ${latest}`
+          entry.append(name, versions)
+
+          const actions = document.createElement("div")
+          actions.className = "update-actions"
+          if (key === "dsh") {
+            const lineLabel = document.createElement("p")
+            lineLabel.className = "update-line"
+            lineLabel.textContent = line === "next" ? I18N.updateLineNext[lang] : I18N.updateLineLatest[lang]
+            entry.appendChild(lineLabel)
+            if (line === "next") {
+              const warning = document.createElement("p")
+              warning.className = "update-warning"
+              warning.textContent = I18N.updateNextWarning[lang]
+              entry.appendChild(warning)
+            }
+            const cmd = document.createElement("p")
+            cmd.className = "update-cmd"
+            cmd.textContent = command
+            entry.appendChild(cmd)
+            const copyBtn = document.createElement("button")
+            copyBtn.type = "button"
+            copyBtn.className = "update-primary"
+            copyBtn.textContent = I18N.updateCopy[lang]
+            copyBtn.addEventListener("click", async () => {
+              await shell.copyUpdateCommand()
+              copyBtn.textContent = I18N.updateCopied[lang]
+            })
+            actions.appendChild(copyBtn)
+          } else {
+            const openBtn = document.createElement("button")
+            openBtn.type = "button"
+            openBtn.className = "update-primary"
+            openBtn.textContent = I18N.updateOpen[lang]
+            openBtn.addEventListener("click", () => void shell.openUpdatePage())
+            actions.appendChild(openBtn)
+          }
+          const dismissBtn = document.createElement("button")
+          dismissBtn.type = "button"
+          dismissBtn.className = "update-dismiss"
+          dismissBtn.textContent = I18N.updateDismiss[lang]
+          dismissBtn.addEventListener("click", () => {
+            entry.remove()
+            if (!updateEntriesEl.querySelector(".update-entry")) {
+              updateCardEl.hidden = true
+              // last entry gone: let main switch to the main UI immediately
+              void shell.updateDismissed()
+            }
+          })
+          actions.appendChild(dismissBtn)
+
+          entry.appendChild(actions)
+          updateEntriesEl.appendChild(entry)
+          updateCardEl.hidden = false
+        }
+
+        shell.onUpdateStatus(({ key, state }) => {
+          if (state === "checking") {
+            setUpdateStatus(key, key === "dsh" ? I18N.updateCheckingDsh[lang] : I18N.updateCheckingApp[lang])
+          } else {
+            clearUpdateStatus(key)
+          }
+        })
+        shell.onUpdateCard((payload) => showUpdateEntry(payload))
+
         shell.isMarketEnabled().then((enabled) => {
           if (!enabled) document.querySelector("#market-card")?.removeAttribute("hidden")
         })

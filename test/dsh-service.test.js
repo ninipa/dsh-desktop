@@ -4,12 +4,19 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import os from 'node:os'
 import path from 'node:path'
 import {
+  UPDATE_PROMPT_WINDOW_MS,
   buildDshArgs,
   compareVersions,
+  decideDshUpdate,
   ensureMinimumReleaseAgeDisabled,
   extractReadyUrl,
+  fetchDshDistTags,
+  fetchLatestAppVersion,
   isMarketInstalled,
+  isNpxFallbackCommand,
+  markUpdatePrompted,
   resolveDshCommand,
+  shouldCheckUpdate,
 } from '../src/dsh-service.js'
 
 test('extractReadyUrl reads the canonical loopback readiness URL', () => {
@@ -146,5 +153,134 @@ test('ensureMinimumReleaseAgeDisabled is a no-op when the workspace file is miss
     assert.doesNotThrow(() => ensureMinimumReleaseAgeDisabled(home))
   } finally {
     rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('isNpxFallbackCommand detects the npx fallback launcher', () => {
+  assert.equal(isNpxFallbackCommand(['/fake/node', '/fake/npx', '--yes', '@deepseek-ai/dsh@latest']), true)
+  assert.equal(isNpxFallbackCommand(['/fake/node', '/fake/dsh']), false)
+})
+
+test('fetchDshDistTags returns the latest and next dist-tags', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({ 'dist-tags': { latest: '0.1.0-rc.7', next: '0.1.0-rc.8' } }),
+  })
+  assert.deepEqual(await fetchDshDistTags({ fetchImpl }), { latest: '0.1.0-rc.7', next: '0.1.0-rc.8' })
+})
+
+test('fetchDshDistTags tolerates a missing next tag', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({ 'dist-tags': { latest: '0.1.0' } }),
+  })
+  assert.deepEqual(await fetchDshDistTags({ fetchImpl }), { latest: '0.1.0', next: null })
+})
+
+test('fetchDshDistTags returns null on non-OK responses', async () => {
+  const fetchImpl = async () => ({ ok: false })
+  assert.equal(await fetchDshDistTags({ fetchImpl }), null)
+})
+
+test('fetchDshDistTags returns null when the payload has no dist-tags', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ error: 'nope' }) })
+  assert.equal(await fetchDshDistTags({ fetchImpl }), null)
+})
+
+test('fetchDshDistTags returns null when the network fails', async () => {
+  const fetchImpl = async () => {
+    throw new Error('offline')
+  }
+  assert.equal(await fetchDshDistTags({ fetchImpl }), null)
+})
+
+test('decideDshUpdate suggests the latest stable line when behind it', () => {
+  const result = decideDshUpdate('0.1.0-rc.6', { latest: '0.1.0-rc.7', next: '0.1.0-rc.8' })
+  assert.equal(result.prompt, true)
+  assert.equal(result.line, 'latest')
+  assert.equal(result.target, '0.1.0-rc.7')
+  assert.match(result.command, /^npm update -g /)
+})
+
+test('decideDshUpdate suggests the next preview line only when latest is satisfied', () => {
+  const result = decideDshUpdate('0.1.0-rc.7', { latest: '0.1.0-rc.7', next: '0.1.0-rc.8' })
+  assert.equal(result.prompt, true)
+  assert.equal(result.line, 'next')
+  assert.equal(result.target, '0.1.0-rc.8')
+  assert.match(result.command, /@next$/)
+})
+
+test('decideDshUpdate does not prompt when current is at or beyond next', () => {
+  assert.equal(decideDshUpdate('0.1.0-rc.8', { latest: '0.1.0-rc.7', next: '0.1.0-rc.8' }).prompt, false)
+  assert.equal(decideDshUpdate('0.1.0-rc.9', { latest: '0.1.0-rc.7', next: '0.1.0-rc.8' }).prompt, false)
+})
+
+test('decideDshUpdate does not prompt when next is missing and latest is satisfied', () => {
+  assert.equal(decideDshUpdate('0.1.0', { latest: '0.1.0', next: null }).prompt, false)
+})
+
+test('decideDshUpdate does not prompt on missing input', () => {
+  assert.equal(decideDshUpdate('0.1.0-rc.6', null).prompt, false)
+  assert.equal(decideDshUpdate(null, { latest: '0.1.0-rc.7', next: null }).prompt, false)
+})
+
+test('fetchLatestAppVersion strips the leading v from the GitHub release tag', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ tag_name: 'v0.1.1' }) })
+  assert.equal(await fetchLatestAppVersion({ fetchImpl }), '0.1.1')
+})
+
+test('fetchLatestAppVersion accepts tags without a v prefix', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ tag_name: '0.1.1' }) })
+  assert.equal(await fetchLatestAppVersion({ fetchImpl }), '0.1.1')
+})
+
+test('fetchLatestAppVersion returns null on failure', async () => {
+  const fetchImpl = async () => {
+    throw new Error('rate limited')
+  }
+  assert.equal(await fetchLatestAppVersion({ fetchImpl }), null)
+})
+
+test('shouldCheckUpdate allows a check when no prompt state exists', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-upstate-'))
+  try {
+    assert.equal(shouldCheckUpdate(path.join(dir, 'state.json'), 'dsh', 1_000), true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('shouldCheckUpdate suppresses a check within 24h of the last prompt', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-upstate-'))
+  const stateFile = path.join(dir, 'state.json')
+  try {
+    markUpdatePrompted(stateFile, 'dsh', 2 * UPDATE_PROMPT_WINDOW_MS, '0.1.0-rc.7')
+    assert.equal(shouldCheckUpdate(stateFile, 'dsh', 2 * UPDATE_PROMPT_WINDOW_MS + UPDATE_PROMPT_WINDOW_MS - 1), false)
+    assert.equal(shouldCheckUpdate(stateFile, 'dsh', 2 * UPDATE_PROMPT_WINDOW_MS + UPDATE_PROMPT_WINDOW_MS), true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('shouldCheckUpdate tracks dsh and app independently', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-upstate-'))
+  const stateFile = path.join(dir, 'state.json')
+  try {
+    const now = 2 * UPDATE_PROMPT_WINDOW_MS
+    markUpdatePrompted(stateFile, 'dsh', now, '0.1.0-rc.7')
+    assert.equal(shouldCheckUpdate(stateFile, 'app', now + 1_000), true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('shouldCheckUpdate treats a corrupted state file as empty', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'dsh-upstate-'))
+  const stateFile = path.join(dir, 'state.json')
+  try {
+    writeFileSync(stateFile, 'not json {')
+    assert.equal(shouldCheckUpdate(stateFile, 'dsh', 1_000), true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })

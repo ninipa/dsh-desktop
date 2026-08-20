@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -13,12 +14,20 @@ import {
   Tray,
 } from 'electron'
 import {
+  APP_UPDATE_URL,
+  DSH_UPDATE_COMMAND,
   compareVersions,
+  decideDshUpdate,
+  fetchDshDistTags,
+  fetchLatestAppVersion,
   getDshVersion,
   installMarketPlugin,
   isMarketInstalled,
+  isNpxFallbackCommand,
+  markUpdatePrompted,
   resolveDshCommand,
   resolvePnpmBinDir,
+  shouldCheckUpdate,
   startDshService,
 } from './dsh-service.js'
 import { applyMacTitleBarStyle } from './mac-titlebar.js'
@@ -42,8 +51,17 @@ let restartCount = 0
 let stopping = false
 let quitting = false
 let marketPromptTimer
+let onStartupPage = true // the startup page is the only place for non-blocking status lines
+let updateChecksStarted = false
+const updateResults = { dsh: null, app: null } // null = not settled yet
+const updatePresented = { dsh: false, app: false } // card or dialog; a prompt is presented exactly once
+let updateDialogOpen = false
+let updateCardVisible = false
+let updateCardTimer
+let mainUiLoaded = false
 
 const dshHome = path.join(app.getPath('appData'), 'Dsh', 'dsh-home')
+const updateStateFile = path.join(app.getPath('userData'), 'update-prompt-state.json')
 
 app.setName(APP_NAME)
 
@@ -137,6 +155,143 @@ async function showStartupError(message, error) {
   })
 }
 
+// --- Update checks (dsh + shell app) -----------------------------------------
+//
+// Both checks run in parallel and never block startup: each is gated by a 24h
+// per-item window (state file), times out after 5s, and fails silently. While
+// the startup page is visible, "checking" status lines are streamed to it and
+// prompts render as a card; once the main UI has loaded, settled prompts fall
+// back to a single native dialog.
+
+function sendUpdateStatus(key, state) {
+  if (onStartupPage) mainWindow?.webContents.send('update:status', { key, state })
+}
+
+async function checkDshUpdate(currentVersion) {
+  const tags = await fetchDshDistTags()
+  if (!tags) return { prompt: false }
+  return decideDshUpdate(currentVersion, tags)
+}
+
+async function checkAppUpdate() {
+  const latest = await fetchLatestAppVersion()
+  if (!latest) return { prompt: false }
+  const current = app.getVersion()
+  return { prompt: compareVersions(current, latest) < 0, current, latest }
+}
+
+function startUpdateChecks({ version, isNpxFallback }) {
+  if (updateChecksStarted) return // a crash-restart must not re-run the checks
+  updateChecksStarted = true
+  const now = Date.now()
+  // Skip gated items entirely: no network call, no status line (the user's
+  // chosen 24h policy means most launches never touch the network here).
+  const dshShouldCheck = !isNpxFallback && version != null && shouldCheckUpdate(updateStateFile, 'dsh', now)
+  const appShouldCheck = shouldCheckUpdate(updateStateFile, 'app', now)
+  if (dshShouldCheck) sendUpdateStatus('dsh', 'checking')
+  if (appShouldCheck) sendUpdateStatus('app', 'checking')
+  void Promise.all([
+    dshShouldCheck ? checkDshUpdate(version) : { prompt: false },
+    appShouldCheck ? checkAppUpdate() : { prompt: false },
+  ]).then(([dsh, app]) => {
+    settleUpdateResult('dsh', dsh)
+    settleUpdateResult('app', app)
+  })
+}
+
+function settleUpdateResult(key, result) {
+  updateResults[key] = result
+  if (result.prompt && !updatePresented[key]) {
+    markUpdatePrompted(updateStateFile, key, Date.now(), result.target) // the 24h window opens when the prompt is shown
+    log(`update prompt (${key}): ${result.current} -> ${result.target} (${result.line ?? ''} line)`)
+    if (onStartupPage) {
+      updatePresented[key] = true // presented as a card; never shown again
+      updateCardVisible = true
+      // Hold the page so the card is actually readable; the dsh-ready switch
+      // (loadMainUiSoon) and this timer both call the idempotent loadMainUi.
+      if (!updateCardTimer) updateCardTimer = setTimeout(() => loadMainUi(), 30_000)
+      mainWindow?.webContents.send('update:card', {
+        key,
+        current: result.current,
+        latest: result.target,
+        line: result.line,
+        command: result.command,
+      })
+    }
+  } else if (onStartupPage && !result.prompt) {
+    sendUpdateStatus(key, 'done')
+  }
+  if (!onStartupPage && updateResults.dsh !== null && updateResults.app !== null) {
+    void maybeShowUpdateDialog()
+  }
+}
+
+// Merged native-dialog fallback for prompts that settle after the main UI has
+// already loaded. Runs at most once per session; card-presented items never
+// reappear here (updatePresented is set when the card was shown).
+async function maybeShowUpdateDialog() {
+  if (updateDialogOpen) return
+  const zh = app.getLocale().toLowerCase().startsWith('zh')
+  const detail = []
+  const buttons = []
+  let openPageButtonIndex = -1
+
+  for (const key of ['dsh', 'app']) {
+    const result = updateResults[key]
+    if (!result.prompt || updatePresented[key]) continue
+    updatePresented[key] = true
+    if (key === 'dsh') {
+      const lineLabel = result.line === 'next'
+        ? (zh ? 'next 尝鲜线（非稳定版本）' : 'next preview line (unstable)')
+        : (zh ? 'latest 稳定线' : 'latest stable line')
+      detail.push(zh ? `dsh  ${result.current} → ${result.target}（${lineLabel}）` : `dsh  ${result.current} -> ${result.target} (${lineLabel})`)
+      if (result.line === 'next') {
+        detail.push(zh ? '注意：next 线为非稳定版本，可能包含未完成或有问题的功能。' : 'Note: the next line is not a stable release and may contain unfinished or broken features.')
+      }
+      detail.push(zh ? `安装命令：${result.command}` : `Run: ${result.command}`)
+    } else {
+      detail.push(zh ? `DSH Desktop  ${result.current} → ${result.target}` : `DSH Desktop  ${result.current} -> ${result.target}`)
+      buttons.push(zh ? '打开下载页' : 'Open download page')
+      openPageButtonIndex = buttons.length - 1
+    }
+  }
+  if (detail.length === 0) return
+
+  buttons.push(zh ? '忽略' : 'Dismiss')
+  updateDialogOpen = true
+  const { response } = await dialog.showMessageBox({
+    type: 'info',
+    title: zh ? '检测到新版本' : 'Updates available',
+    message: zh ? '检测到新版本' : 'Updates available',
+    detail: detail.join('\n'),
+    buttons,
+    defaultId: buttons.length - 1,
+    cancelId: buttons.length - 1,
+  })
+  updateDialogOpen = false
+  if (response === openPageButtonIndex) shell.openExternal(APP_UPDATE_URL)
+}
+
+function loadMainUi() {
+  if (mainUiLoaded) return
+  mainUiLoaded = true
+  clearTimeout(marketPromptTimer)
+  clearTimeout(updateCardTimer)
+  updateCardVisible = false
+  onStartupPage = false
+  void mainWindow?.loadURL(serviceUrl)
+}
+
+// Post-ready switch that defers while an update card is on screen, giving the
+// prompt its full 30s grace before the main UI loads.
+function loadMainUiSoon() {
+  if (updateCardVisible) {
+    if (!updateCardTimer) updateCardTimer = setTimeout(() => loadMainUi(), 30_000)
+    return
+  }
+  loadMainUi()
+}
+
 async function launch() {
   // Only dev mode (no .app bundle) needs an explicit dock icon. Packaged
   // builds use their own icon.icns, which macOS already renders with the
@@ -161,6 +316,9 @@ async function launch() {
 }
 
 async function startAndLoad() {
+  // A crash-restart re-enters this function; allow loadMainUi to reload the
+  // main UI again (the previous page shows a dead dsh connection).
+  mainUiLoaded = false
   let command
   try {
     command = await resolveDshCommand()
@@ -178,6 +336,8 @@ async function startAndLoad() {
   if (version && compareVersions(version, MIN_DSH_VERSION) < 0) {
     console.warn(`dsh version ${version} is older than the supported minimum ${MIN_DSH_VERSION}; continuing anyway`)
   }
+
+  startUpdateChecks({ version, isNpxFallback: isNpxFallbackCommand(command) })
 
   try {
     // The dsh web process needs pnpm on its PATH for the plugin market at
@@ -209,12 +369,12 @@ async function startAndLoad() {
     log(`ready: ${serviceUrl}`)
     restartCount = 0 // a healthy run resets the crash counter
     if (isMarketInstalled(dshHome)) {
-      await mainWindow?.loadURL(serviceUrl)
+      loadMainUiSoon()
     } else {
       // First-run onboarding: keep the startup page showing the plugin-market
       // card; fall back to the UI after 30s if the user does nothing.
       marketPromptTimer = setTimeout(() => {
-        void mainWindow?.loadURL(serviceUrl)
+        loadMainUi()
       }, 30_000)
     }
   } catch (error) {
@@ -238,12 +398,32 @@ ipcMain.handle('market:install', async () => {
 
 ipcMain.handle('market:skip', () => {
   clearTimeout(marketPromptTimer)
-  void mainWindow?.loadURL(serviceUrl)
+  loadMainUi()
 })
 
 ipcMain.handle('market:restart', () => {
   app.relaunch()
   app.quit()
+})
+
+ipcMain.handle('update:copy', () => {
+  clipboard.writeText(DSH_UPDATE_COMMAND)
+  return true
+})
+
+ipcMain.handle('update:open', () => {
+  shell.openExternal(APP_UPDATE_URL)
+  return true
+})
+
+ipcMain.handle('update:dismissed', () => {
+  clearTimeout(updateCardTimer)
+  updateCardTimer = undefined
+  updateCardVisible = false
+  // With the market onboarding timer pending, that flow owns the page; only
+  // the plain post-ready path (serviceUrl set, no market timer) switches now.
+  if (serviceUrl && !marketPromptTimer) loadMainUi()
+  return true
 })
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()

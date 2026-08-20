@@ -347,6 +347,130 @@ export function ensureMinimumReleaseAgeDisabled(dshHome) {
   }
 }
 
+// --- Update checks -----------------------------------------------------------
+//
+// Two independent lines: dsh (npm registry latest vs. the resolved dsh) and the
+// shell app itself (GitHub release tag vs. app.getVersion()). Both prompt at
+// most once per 24h per item, so a frequently-released prerelease chain never
+// nags on every launch. All network paths fail silently: an offline or slow
+// connection must never delay or break startup.
+
+export const UPDATE_PROMPT_WINDOW_MS = 24 * 60 * 60 * 1000
+export const DSH_UPDATE_COMMAND = 'npm update -g @deepseek-ai/dsh'
+export const DSH_NEXT_UPDATE_COMMAND = 'npm install -g @deepseek-ai/dsh@next'
+export const APP_UPDATE_URL = 'https://github.com/ninipa/dsh-desktop/releases/latest'
+
+// The npx fallback (`npx --yes @deepseek-ai/dsh@latest`) always runs the latest
+// release, so an update prompt would be meaningless; only system-installed dsh
+// (npm -g) can lag behind and needs the check.
+export function isNpxFallbackCommand(command) {
+  return Array.isArray(command) && command.some((part) => part.includes('@deepseek-ai/dsh@latest'))
+}
+
+// dsh publishes two dist-tags: `latest` (the stable line, what `npm update -g`
+// installs) and `next` (a preview line). Both are probed so the user can also
+// be told about preview releases, clearly labelled as unstable.
+export async function fetchDshDistTags({
+  fetchImpl = fetch,
+  timeoutMs = 5_000,
+  registryUrl = 'https://registry.npmjs.org/@deepseek-ai/dsh',
+} = {}) {
+  try {
+    const response = await fetchImpl(registryUrl, {
+      signal: AbortSignal.timeout(timeoutMs),
+      // install-v1 keeps the response small (abbreviated metadata)
+      headers: { accept: 'application/vnd.npm.install-v1+json' },
+    })
+    if (!response.ok) return null
+    const data = await response.json()
+    const distTags = data['dist-tags']
+    if (!distTags || typeof distTags !== 'object') return null
+    return {
+      latest: typeof distTags.latest === 'string' ? distTags.latest : null,
+      next: typeof distTags.next === 'string' ? distTags.next : null,
+    }
+  } catch {
+    return null // offline, timeout or bad payload: no information, never block startup
+  }
+}
+
+// Prefer the stable line: only when the installed dsh already satisfies
+// `latest` do we suggest the `next` preview line (clearly marked unstable).
+export function decideDshUpdate(currentVersion, tags) {
+  const latest = tags?.latest ?? null
+  if (!latest || !currentVersion) return { prompt: false }
+  if (compareVersions(currentVersion, latest) < 0) {
+    return {
+      prompt: true,
+      line: 'latest',
+      current: currentVersion,
+      target: latest,
+      command: DSH_UPDATE_COMMAND,
+    }
+  }
+  const next = tags?.next ?? null
+  if (next && compareVersions(currentVersion, next) < 0) {
+    return {
+      prompt: true,
+      line: 'next',
+      current: currentVersion,
+      target: next,
+      command: DSH_NEXT_UPDATE_COMMAND,
+    }
+  }
+  return { prompt: false }
+}
+
+export async function fetchLatestAppVersion({
+  fetchImpl = fetch,
+  timeoutMs = 5_000,
+  apiUrl = 'https://api.github.com/repos/ninipa/dsh-desktop/releases/latest',
+} = {}) {
+  try {
+    const response = await fetchImpl(apiUrl, {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-desktop' },
+    })
+    if (!response.ok) return null
+    const data = await response.json()
+    if (typeof data.tag_name !== 'string') return null
+    return data.tag_name.replace(/^v/, '')
+  } catch {
+    return null
+  }
+}
+
+// Prompt state lives in <userData>/update-prompt-state.json:
+// { "dsh": { "promptedAt": <ms>, "version": "..." }, "app": { ... } }
+// Both items are de-duplicated independently.
+export function readPromptState(stateFile) {
+  try {
+    const parsed = JSON.parse(readFileSync(stateFile, 'utf8'))
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {} // missing or corrupted file means "no state": allow the check
+  }
+}
+
+export function shouldCheckUpdate(stateFile, key, nowMs) {
+  const entry = readPromptState(stateFile)[key]
+  if (!entry || typeof entry.promptedAt !== 'number') return true
+  return nowMs - entry.promptedAt >= UPDATE_PROMPT_WINDOW_MS
+}
+
+// Best-effort by design: an unwritable state file must never crash the prompt
+// path, only degrade to "may prompt again next launch".
+export function markUpdatePrompted(stateFile, key, nowMs, version) {
+  try {
+    const state = readPromptState(stateFile)
+    state[key] = { promptedAt: nowMs, ...(version ? { version } : {}) }
+    mkdirSync(path.dirname(stateFile), { recursive: true })
+    writeFileSync(stateFile, JSON.stringify(state, null, 2))
+  } catch {
+    // ignore: see above
+  }
+}
+
 export async function installMarketPlugin({
   command,
   dshHome,
