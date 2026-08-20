@@ -78,7 +78,7 @@ npm install -g @deepseek-ai/dsh
 | 会话 / 对话记录 | `~/Library/Application Support/Dsh/dsh-home/storages/` 和 `sessions/` |
 | 安装的插件 / profile | `~/Library/Application Support/Dsh/dsh-home/profiles/` |
 | 设置 | `~/Library/Application Support/Dsh/dsh-home/settings.yaml` |
-| 应用日志 | `~/Library/Logs/DSH Desktop/dsh-desktop.log` |
+| 应用日志 | `~/Library/Logs/DSH Desktop/DSH Desktop/dsh-desktop.log`（见"已知限制"） |
 
 ### 数据与原生 dsh 相互隔离（重要）
 
@@ -96,12 +96,15 @@ npm install -g @deepseek-ai/dsh
 ```bash
 rm -rf "$HOME/Library/Application Support/Dsh"
 rm -rf "$HOME/Library/Application Support/DSH Desktop"
+rm -rf "$HOME/Library/Logs/DSH Desktop"
 ```
 
 ### 更新
 
-- **应用外壳**：有新版时下载新的 DMG 覆盖即可。由于构建未公证，**每个新版本都需要在系统设置 → 隐私与安全性 → 仍要打开中允许一次**。
-- **dsh 本体**：应用用的是你系统里的 `dsh`，执行 `npm update -g @deepseek-ai/dsh` 后重启应用即可。
+应用**每次启动都会检查更新**（每项 24h 一次，失败静默），只提示、绝不代装：
+
+- **应用外壳**：通过 GitHub 检测新版本，启动提示带"打开下载页"按钮。由于构建未公证，**每个新版本都需要在系统设置 → 隐私与安全性 → 仍要打开中允许一次**。
+- **dsh 本体**：应用用的是你系统里的 `dsh`；提示会给出确切的安装命令（优先 `latest` 稳定线，`next` 尝鲜线会明确标注非稳定），如 `npm update -g @deepseek-ai/dsh`，执行后重启应用即可。
 
 ---
 
@@ -174,7 +177,8 @@ DSH Desktop 是一个薄壳，不 fork、不修改 Harness UI，只负责宿主�
 
 - **仅 macOS** —— dsh 官方不支持 Windows 沙箱；Linux 尚未验证。
 - 上游 dsh 仍是 developer preview，可能出现破坏性变更。
-- 无自动更新。
+- 无自动更新 —— 只提示，下载安装需手动。
+- 应用日志路径含重复的应用名段（`~/Library/Logs/DSH Desktop/DSH Desktop/`）——Electron 的 `logs` 路径已含应用名所致，无功能影响，清理待办。
 
 ## 许可证
 

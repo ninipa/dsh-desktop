@@ -79,7 +79,7 @@ Everything you do inside the app — your API key, conversations, workspaces, in
 | Conversations / sessions | `~/Library/Application Support/Dsh/dsh-home/storages/` and `sessions/` |
 | Installed plugins / profile | `~/Library/Application Support/Dsh/dsh-home/profiles/` |
 | Settings | `~/Library/Application Support/Dsh/dsh-home/settings.yaml` |
-| App logs | `~/Library/Logs/DSH Desktop/dsh-desktop.log` |
+| App logs | `~/Library/Logs/DSH Desktop/DSH Desktop/dsh-desktop.log` (see Known limitations) |
 
 ### Data is isolated from bare `dsh`
 
@@ -97,12 +97,15 @@ Dragging the app to the Trash removes the application but **keeps your data** (s
 ```bash
 rm -rf "$HOME/Library/Application Support/Dsh"
 rm -rf "$HOME/Library/Application Support/DSH Desktop"
+rm -rf "$HOME/Library/Logs/DSH Desktop"
 ```
 
 ### Updating
 
-- **The app shell**: download the newest DMG when a new release is out. Because builds are not notarized, each new version requires allowing it again in **System Settings → Privacy & Security → Open Anyway**.
-- **dsh itself**: the app uses your system `dsh`, so just run `npm update -g @deepseek-ai/dsh` and restart the app.
+The app checks for updates at every launch (24h per item, silent on failure) and tells you what to do — it never installs anything on its own:
+
+- **The app shell**: a new release is detected via GitHub; the startup prompt offers an "Open download page" button. Because builds are not notarized, each new version requires allowing it again in **System Settings → Privacy & Security → Open Anyway**.
+- **dsh itself**: the app uses your system `dsh`; the prompt shows the exact install command (stable `latest` line first, preview `next` line clearly labelled as unstable) for you to run, e.g. `npm update -g @deepseek-ai/dsh`, then restart the app.
 
 ---
 
@@ -175,7 +178,8 @@ Release builds are currently **ad-hoc signed and not notarized** — Apple's not
 
 - **macOS only** — `dsh` does not officially support Windows sandboxes; Linux support is not yet verified.
 - Upstream dsh is still a developer preview and may introduce breaking changes.
-- No automatic app updates.
+- No automatic app updates — prompts only, downloads are manual.
+- The app log path contains a duplicated app-name segment (`~/Library/Logs/DSH Desktop/DSH Desktop/`) because Electron's `logs` path already includes the app name; harmless, cleanup pending.
 
 ## License
 
