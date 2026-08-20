@@ -142,7 +142,7 @@ npm run dist:mac:x64     # Intel DMG + ZIP
 DSH Desktop 是一个薄壳，不 fork、不修改 Harness UI，只负责宿主：
 
 1. **解析 dsh** —— 通过 login shell 定位你已装的 `dsh`（`/bin/zsh -l -i -c 'command -v dsh'`），失败回退 `npx --yes @deepseek-ai/dsh@latest`，再失败弹安装指引。`-i`（交互式）参数是必需的：`.zshrc`（负责把 `fnm`/`node` 加进 `PATH`）只在交互式 shell 中读取。解析结果**从不缓存**，每次启动现查。
-2. **启动** —— spawn `dsh --profile web --host 127.0.0.1 --port 0`（随机回环端口），并且**显式用 `node` 执行 dsh 脚本**（GUI 应用不继承 shell `PATH`，`#!/usr/bin/env node` 的 shebang 会失败）。
+2. **启动** —— spawn `dsh --profile web --host 127.0.0.1 --port 0`（随机回环端口），并且**显式用 `node` 执行 dsh 脚本**（GUI 应用不继承 shell `PATH`，`#!/usr/bin/env node` 的 shebang 会失败）。dsh 0.1.0-rc.8 起 `dsh web` 会自动打开默认浏览器，壳按版本门控追加 `--no-open`，只显示内嵌窗口。
 3. **等待就绪** —— 匹配 stdout 行 `dsh web: http://127.0.0.1:<port>`（另有 HTTP 200 轮询作兜底通道）。
 4. **加载** —— 顶层 `BrowserWindow.loadURL(url)`（同源）。刻意不用 `<iframe>`：上游 `/api` 信任边界会拒绝 null/跨源 Origin。
 5. **隔离** —— 设置 `DSH_HOME` 指向 `~/Library/Application Support/Dsh/dsh-home`，绝不触碰 `~/.dsh`。

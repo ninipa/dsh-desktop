@@ -6,6 +6,7 @@ import path from 'node:path'
 import {
   UPDATE_PROMPT_WINDOW_MS,
   buildDshArgs,
+  supportsNoOpenFlag,
   compareVersions,
   decideDshUpdate,
   ensureMinimumReleaseAgeDisabled,
@@ -328,4 +329,21 @@ test('migrateLegacyUserData is a no-op without legacy files', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('supportsNoOpenFlag gates on dsh rc.8 which auto-opens the browser', () => {
+  assert.equal(supportsNoOpenFlag('0.1.0-rc.7'), false)
+  assert.equal(supportsNoOpenFlag('0.1.0-rc.8'), true)
+  assert.equal(supportsNoOpenFlag('0.1.0-rc.9'), true)
+  assert.equal(supportsNoOpenFlag('0.1.0'), true)
+  assert.equal(supportsNoOpenFlag(null), false)
+})
+
+test('buildDshArgs appends --no-open only when requested', () => {
+  assert.deepEqual(buildDshArgs(['/fake/node', '/fake/dsh']), [
+    '/fake/node', '/fake/dsh', '--profile', 'web', '--host', '127.0.0.1', '--port', '0',
+  ])
+  assert.deepEqual(buildDshArgs(['/fake/node', '/fake/dsh'], { noOpen: true }), [
+    '/fake/node', '/fake/dsh', '--profile', 'web', '--host', '127.0.0.1', '--port', '0', '--no-open',
+  ])
 })

@@ -143,7 +143,7 @@ npm run dist:mac:x64     # Intel DMG + ZIP
 DSH Desktop is a thin shell. It does not fork or modify the Harness UI; it only hosts it:
 
 1. **Resolve dsh** — locates your installed `dsh` via a login shell (`/bin/zsh -l -i -c 'command -v dsh'`), falling back to `npx --yes @deepseek-ai/dsh@latest`, then to an install prompt. The `-i` (interactive) flag is required because `.zshrc` (which sets up `fnm`/`node` on `PATH`) is only read by interactive shells. Resolved paths are **never cached** — they are looked up fresh on every launch.
-2. **Launch** — spawns `dsh --profile web --host 127.0.0.1 --port 0` (random loopback port), running the `dsh` script explicitly through `node` (GUI apps don't inherit the shell `PATH`, so a `#!/usr/bin/env node` shebang would fail).
+2. **Launch** — spawns `dsh --profile web --host 127.0.0.1 --port 0` (random loopback port), running the `dsh` script explicitly through `node` (GUI apps don't inherit the shell `PATH`, so a `#!/usr/bin/env node` shebang would fail). Since dsh 0.1.0-rc.8, `dsh web` auto-opens the default browser; the shell appends `--no-open` (version-gated) so only the embedded window is shown.
 3. **Wait for readiness** — resolves when the stdout line `dsh web: http://127.0.0.1:<port>` appears (with an HTTP 200 poll as a backup channel).
 4. **Load** — `BrowserWindow.loadURL(url)` at the top level (same-origin). An `<iframe>` is intentionally not used: the upstream `/api` trust boundary rejects null/cross-origin origins.
 5. **Isolate** — sets `DSH_HOME` to `~/Library/Application Support/Dsh/dsh-home` so the app never touches `~/.dsh`.

@@ -113,8 +113,18 @@ export function compareVersions(a, b) {
   return 0
 }
 
-export function buildDshArgs(command) {
-  return [...command, '--profile', 'web', '--host', '127.0.0.1', '--port', '0']
+// dsh 0.1.0-rc.8 changed `dsh web` to open the default browser after serving;
+// it added `--no-open` to disable that. Older releases neither open a browser
+// nor know the flag (commander rejects unknown options), so the flag is only
+// appended when the resolved version supports it.
+const NO_OPEN_SINCE = '0.1.0-rc.8'
+
+export function supportsNoOpenFlag(version) {
+  return !!version && compareVersions(version, NO_OPEN_SINCE) >= 0
+}
+
+export function buildDshArgs(command, { noOpen = false } = {}) {
+  return [...command, '--profile', 'web', '--host', '127.0.0.1', '--port', '0', ...(noOpen ? ['--no-open'] : [])]
 }
 
 export function startDshService({
@@ -123,6 +133,7 @@ export function startDshService({
   environment = process.env,
   timeoutMs = 60_000,
   pathExtras = '',
+  noOpen = false,
 } = {}) {
   if (!command || command.length === 0) {
     throw new Error('command is required')
@@ -171,7 +182,7 @@ export function startDshService({
     }
   }
 
-  const args = buildDshArgs(command).slice(1)
+  const args = buildDshArgs(command, { noOpen }).slice(1)
   const child = spawn(command[0], args, {
     env: {
       ...environment,

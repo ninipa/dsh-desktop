@@ -30,6 +30,7 @@ import {
   resolvePnpmBinDir,
   shouldCheckUpdate,
   startDshService,
+  supportsNoOpenFlag,
 } from './dsh-service.js'
 import { applyMacTitleBarStyle } from './mac-titlebar.js'
 import { createWindowOptions } from './window-options.js'
@@ -363,7 +364,15 @@ async function startAndLoad() {
     // The dsh web process needs pnpm on its PATH for the plugin market at
     // runtime; GUI-launched apps do not inherit it, so inject it explicitly.
     const pnpmBinDir = await resolvePnpmBinDir()
-    service = startDshService({ command, dshHome, environment: { ...process.env }, pathExtras: pnpmBinDir })
+    service = startDshService({
+      command,
+      dshHome,
+      environment: { ...process.env },
+      pathExtras: pnpmBinDir,
+      // dsh >= rc.8 opens the default browser after serving; the shell embeds
+      // the UI itself, so suppress that (gated for older dsh compatibility).
+      noOpen: supportsNoOpenFlag(version),
+    })
     const current = service
     current.child.on('exit', () => {
       if (stopping || isQuitting) return
